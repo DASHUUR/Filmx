@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   View,
@@ -10,7 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 
-import axios from 'axios';
+import { FirebaseError } from 'firebase/app';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
@@ -26,15 +25,23 @@ export default function LoginScreen() {
     (state) => state.loginWithPassword
   );
 
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!username.trim() || !password) {
+    if (!email.trim() || !password) {
       Alert.alert(
         'Error',
-        'Please enter username and password.'
+        'Please enter email and password.'
+      );
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      Alert.alert(
+        'Error',
+        'Please enter a valid email address.'
       );
       return;
     }
@@ -44,18 +51,20 @@ export default function LoginScreen() {
 
       console.log('========== MOBILE LOGIN ==========');
       console.log('Login button pressed');
-      console.log('Username:', username.trim());
+      console.log('Email:', email.trim());
       console.log('Password: [HIDDEN]');
+      console.log('AUTH PROVIDER: Firebase');
 
-      // 1. authStore -> authApi -> DummyJSON
-      await loginWithPassword(username.trim(), password);
+      // authStore -> authApi -> Firebase
+      await loginWithPassword(
+        email.trim(),
+        password
+      );
 
-      // 2. authStore token болон user хадгалсан
       console.log('LOGIN SUCCESS');
-      console.log('Token saved by authStore');
+      console.log('Firebase authentication successful');
       console.log('Navigating to MainTabs');
 
-      // 3. HomeScreen рүү шилжих
       navigation.reset({
         index: 0,
         routes: [{ name: 'MainTabs' }],
@@ -64,10 +73,39 @@ export default function LoginScreen() {
     } catch (error) {
       let message = 'Please try again.';
 
-      if (axios.isAxiosError(error)) {
-        message =
-          error.response?.data?.message ||
-          error.message;
+      if (error instanceof FirebaseError) {
+        console.log('FIREBASE ERROR CODE:', error.code);
+
+        switch (error.code) {
+          case 'auth/invalid-email':
+            message = 'Invalid email address.';
+            break;
+
+          case 'auth/user-not-found':
+          case 'auth/wrong-password':
+          case 'auth/invalid-credential':
+            message = 'Incorrect email or password.';
+            break;
+
+          case 'auth/user-disabled':
+            message = 'This account has been disabled.';
+            break;
+
+          case 'auth/too-many-requests':
+            message = 'Too many attempts. Try again later.';
+            break;
+
+          case 'auth/network-request-failed':
+            message = 'Please check your internet connection.';
+            break;
+
+          case 'auth/operation-not-allowed':
+            message = 'Email sign-in is not enabled.';
+            break;
+
+          default:
+            message = 'Unable to sign in. Please try again.';
+        }
       } else if (error instanceof Error) {
         message = error.message;
       }
@@ -75,6 +113,7 @@ export default function LoginScreen() {
       console.log('LOGIN FAILED:', message);
 
       Alert.alert('Login failed', message);
+
     } finally {
       setLoading(false);
     }
@@ -94,13 +133,15 @@ export default function LoginScreen() {
 
       <TextInput
         style={styles.input}
-        placeholder="Username"
+        placeholder="Email"
         placeholderTextColor={COLORS.secondary}
-        value={username}
-        onChangeText={setUsername}
+        value={email}
+        onChangeText={setEmail}
+        keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}
-        autoComplete="username"
+        autoComplete="email"
+        editable={!loading}
       />
 
       <TextInput
@@ -109,8 +150,23 @@ export default function LoginScreen() {
         placeholderTextColor={COLORS.secondary}
         value={password}
         onChangeText={setPassword}
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="current-password"
         secureTextEntry
+        editable={!loading}
       />
+
+      {/* FORGOT PASSWORD */}
+      <Pressable
+        style={styles.forgotPasswordButton}
+        disabled={loading}
+        onPress={() => navigation.navigate('ForgotPassword')}
+      >
+        <Text style={styles.forgotPasswordText}>
+          Forgot Password?
+        </Text>
+      </Pressable>
 
       <Pressable
         style={[
@@ -130,6 +186,7 @@ export default function LoginScreen() {
       </Pressable>
 
       <Pressable
+        disabled={loading}
         onPress={() => navigation.navigate('Register')}
       >
         <Text style={styles.link}>
@@ -147,6 +204,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 25,
   },
+
   logo: {
     color: COLORS.primary,
     fontSize: 38,
@@ -155,16 +213,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 40,
   },
+
   heading: {
     color: COLORS.white,
     fontSize: 27,
     fontWeight: 'bold',
   },
+
   subtitle: {
     color: COLORS.secondary,
     marginTop: 8,
     marginBottom: 30,
   },
+
   input: {
     backgroundColor: COLORS.surface,
     color: COLORS.white,
@@ -172,6 +233,21 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 15,
   },
+
+  forgotPasswordButton: {
+    alignSelf: 'flex-end',
+    marginBottom: 5,
+    paddingVertical: 8,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+
+  forgotPasswordText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
   button: {
     backgroundColor: COLORS.primary,
     padding: 17,
@@ -179,10 +255,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
   },
+
   buttonText: {
     color: COLORS.white,
     fontWeight: 'bold',
   },
+
   link: {
     color: COLORS.secondary,
     textAlign: 'center',

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -20,6 +19,7 @@ import { getMovieTrailer } from '../services/api/youtubeApi';
 import { useFavoriteStore } from '../store/favoriteStore';
 import { COLORS } from '../constants/colors';
 import { IMAGE_BASE_URL } from '../services/api/apiClient';
+import CommentSection from '../components/CommentSection';
 
 type DetailsRoute = RouteProp<RootStackParamList, 'MovieDetails'>;
 
@@ -66,12 +66,15 @@ export default function DetailsScreen() {
   const toggleFavorite = useFavoriteStore(
     (state) => state.toggleFavorite
   );
+
   const toggleWatchlist = useFavoriteStore(
     (state) => state.toggleWatchlist
   );
+
   const isFavorite = useFavoriteStore(
     (state) => state.isFavorite(movie.id)
   );
+
   const isWatchlisted = useFavoriteStore(
     (state) => state.isWatchlisted(movie.id)
   );
@@ -118,6 +121,7 @@ export default function DetailsScreen() {
 
       if (trailerResult.status === 'fulfilled') {
         const video = trailerResult.value;
+
         if (video?.key) setTrailer(video.key);
       } else {
         console.log('Trailer error:', trailerResult.reason);
@@ -161,6 +165,7 @@ export default function DetailsScreen() {
     <ScrollView
       style={styles.container}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
     >
       <ImageBackground
         source={
@@ -242,18 +247,22 @@ export default function DetailsScreen() {
             label="Release Date"
             value={details.release_date || 'Unknown'}
           />
+
           <InfoRow
             label="Runtime"
             value={runtimeText}
           />
+
           <InfoRow
             label="Language"
             value={details.original_language?.toUpperCase() || 'Unknown'}
           />
+
           <InfoRow
             label="Status"
             value={details.status || 'Unknown'}
           />
+
           {director ? (
             <InfoRow label="Director" value={director} />
           ) : null}
@@ -342,6 +351,10 @@ export default function DetailsScreen() {
             </ScrollView>
           </>
         )}
+
+        {/* Firebase Realtime Database - Comments */}
+        <CommentSection movieId={movie.id} />
+
       </View>
     </ScrollView>
   );
@@ -367,74 +380,89 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+
   backdrop: {
     height: 330,
     justifyContent: 'flex-end',
     backgroundColor: COLORS.surface,
   },
+
   overlay: {
     backgroundColor: '#000000B0',
     padding: 22,
     paddingTop: 70,
   },
+
   movieTitle: {
     color: COLORS.white,
     fontSize: 29,
     fontWeight: '800',
   },
+
   rating: {
     color: '#FACC15',
     marginTop: 10,
     fontSize: 15,
     fontWeight: '600',
   },
+
   content: {
     padding: 20,
     paddingBottom: 45,
   },
+
   movieHeader: {
     flexDirection: 'row',
     gap: 16,
     marginBottom: 24,
   },
+
   poster: {
     width: 115,
     height: 170,
     borderRadius: 12,
     backgroundColor: COLORS.surface,
   },
+
   emptyPoster: {
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   muted: {
     color: COLORS.secondary,
     fontSize: 12,
   },
+
   headerInfo: {
     flex: 1,
     justifyContent: 'center',
     gap: 9,
   },
+
   headerTitle: {
     color: COLORS.white,
     fontSize: 21,
     fontWeight: '700',
   },
+
   meta: {
     color: COLORS.secondary,
     fontSize: 13,
   },
+
   genre: {
     color: COLORS.white,
     fontSize: 13,
     lineHeight: 20,
   },
+
   score: {
     color: '#FACC15',
     fontSize: 16,
     fontWeight: '700',
   },
+
   tagline: {
     color: COLORS.secondary,
     fontSize: 15,
@@ -442,6 +470,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 26,
   },
+
   heading: {
     color: COLORS.white,
     fontSize: 21,
@@ -449,28 +478,33 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     marginTop: 12,
   },
+
   description: {
     color: COLORS.secondary,
     fontSize: 15,
     lineHeight: 25,
     marginBottom: 25,
   },
+
   infoCard: {
     backgroundColor: COLORS.surface,
     borderRadius: 16,
     padding: 16,
     marginBottom: 25,
   },
+
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 10,
     gap: 12,
   },
+
   infoLabel: {
     color: COLORS.secondary,
     fontSize: 13,
   },
+
   infoValue: {
     color: COLORS.white,
     fontSize: 13,
@@ -478,6 +512,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     textAlign: 'right',
   },
+
   primaryButton: {
     backgroundColor: COLORS.primary,
     padding: 17,
@@ -485,6 +520,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 11,
   },
+
   secondaryButton: {
     backgroundColor: COLORS.surface,
     padding: 17,
@@ -492,6 +528,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 11,
   },
+
   trailerButton: {
     backgroundColor: '#303036',
     padding: 17,
@@ -499,21 +536,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 28,
   },
+
   disabledButton: {
     opacity: 0.5,
   },
+
   buttonText: {
     color: COLORS.white,
     fontSize: 14,
     fontWeight: '700',
   },
+
   castList: {
     marginBottom: 20,
   },
+
   castCard: {
     width: 105,
     marginRight: 14,
   },
+
   castImage: {
     width: 105,
     height: 135,
@@ -521,11 +563,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     marginBottom: 9,
   },
+
   castName: {
     color: COLORS.white,
     fontSize: 13,
     fontWeight: '700',
   },
+
   castRole: {
     color: COLORS.secondary,
     fontSize: 11,

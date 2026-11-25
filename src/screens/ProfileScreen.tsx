@@ -1,4 +1,5 @@
-import React from 'react';
+
+import React, { useState } from 'react';
 
 import {
   View,
@@ -6,6 +7,7 @@ import {
   Pressable,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 
 import { useNavigation } from '@react-navigation/native';
@@ -20,24 +22,61 @@ export default function ProfileScreen() {
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const user = useAuthStore((state) => state.user);
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
   const logout = useAuthStore((state) => state.logout);
 
-  const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
+  const [loading, setLoading] = useState(false);
 
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'MainTabs' }],
-          });
+  const fullName = user
+    ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+      || user.username
+      || 'User'
+    : 'Guest User';
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
         },
-      },
-    ]);
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+
+              console.log('========== MOBILE LOGOUT ==========');
+              console.log('AUTH PROVIDER: Firebase');
+
+              await logout();
+
+              console.log('LOGOUT SUCCESS');
+              console.log('USER SESSION CLEARED');
+
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'MainTabs' }],
+              });
+
+            } catch (error) {
+              console.log('LOGOUT FAILED:', error);
+
+              Alert.alert(
+                'Logout failed',
+                'Please try again.'
+              );
+
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -47,14 +86,12 @@ export default function ProfileScreen() {
       <View style={styles.profileCard}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>
-            {user?.username?.charAt(0).toUpperCase() || 'G'}
+            {fullName.charAt(0).toUpperCase()}
           </Text>
         </View>
 
         <Text style={styles.name}>
-          {user?.firstName
-            ? `${user.firstName} ${user.lastName || ''}`
-            : 'Guest User'}
+          {fullName}
         </Text>
 
         <Text style={styles.email}>
@@ -62,25 +99,42 @@ export default function ProfileScreen() {
         </Text>
       </View>
 
-      {!user ? (
+      {!isLoggedIn || !user ? (
         <>
           <Pressable
             style={styles.button}
             onPress={() => navigation.navigate('Login')}
           >
-            <Text style={styles.buttonText}>Login</Text>
+            <Text style={styles.buttonText}>
+              Login
+            </Text>
           </Pressable>
 
           <Pressable
             style={styles.secondaryButton}
             onPress={() => navigation.navigate('Register')}
           >
-            <Text style={styles.buttonText}>Create Account</Text>
+            <Text style={styles.buttonText}>
+              Create Account
+            </Text>
           </Pressable>
         </>
       ) : (
-        <Pressable style={styles.logout} onPress={handleLogout}>
-          <Text style={styles.buttonText}>Logout</Text>
+        <Pressable
+          style={[
+            styles.logout,
+            loading && { opacity: 0.6 },
+          ]}
+          disabled={loading}
+          onPress={handleLogout}
+        >
+          {loading ? (
+            <ActivityIndicator color={COLORS.white} />
+          ) : (
+            <Text style={styles.buttonText}>
+              Logout
+            </Text>
+          )}
         </Pressable>
       )}
     </View>

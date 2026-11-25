@@ -7,6 +7,7 @@ import TabNavigator from './TabNavigator';
 import DetailsScreen from '../screens/DetailsScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 
 import { RootStackParamList } from './types';
 import { COLORS } from '../constants/colors';
@@ -59,6 +60,15 @@ export default function RootNavigator() {
         component={RegisterScreen}
         options={{
           title: 'Register',
+          headerShown: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="ForgotPassword"
+        component={ForgotPasswordScreen}
+        options={{
+          title: 'Forgot Password',
           headerShown: false,
         }}
       />

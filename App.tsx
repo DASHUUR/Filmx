@@ -1,13 +1,14 @@
-import React, { useEffect, useState } from 'react';
 
-import { NavigationContainer } from '@react-navigation/native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import React, { useEffect, useState } from "react";
 
-import RootNavigator from './src/navigation/RootNavigator';
-import Loading from './src/components/Loading';
+import { NavigationContainer } from "@react-navigation/native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { useFavoriteStore } from './src/store/favoriteStore';
-import { useAuthStore } from './src/store/authStore';
+import RootNavigator from "./src/navigation/RootNavigator";
+import Loading from "./src/components/Loading";
+
+import { useFavoriteStore } from "./src/store/favoriteStore";
+import { useAuthStore } from "./src/store/authStore";
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -22,12 +23,30 @@ export default function App() {
 
   useEffect(() => {
     const initialize = async () => {
-      await Promise.all([
-        loadFavorites(),
-        loadUser(),
-      ]);
+      try {
+        console.log("========== APP INITIALIZATION ==========");
 
-      setReady(true);
+        // 1. Firebase Authentication session сэргээх
+        await loadUser();
+
+        console.log("AUTH INITIALIZATION COMPLETE");
+
+        // 2. Favorites болон Watchlist татах
+        await loadFavorites();
+
+        console.log(
+          "MOVIE DATA LOADED:",
+          useFavoriteStore.getState().hydrated
+        );
+
+        console.log("APP INITIALIZATION COMPLETE");
+
+      } catch (error) {
+        console.log("APP INITIALIZATION ERROR:", error);
+
+      } finally {
+        setReady(true);
+      }
     };
 
     initialize();

@@ -1,14 +1,18 @@
-
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { create } from "zustand";
+
 import { User } from "../types/user";
+import { auth } from "../config/firebase";
+import { useFavoriteStore } from "./favoriteStore";
 
 import {
   loginUser,
   getAuthUser,
-  refreshAuthToken,
+  getAuthToken,
   registerUser,
+  logoutUser,
+  resetPassword as resetPasswordApi,
 } from "../services/api/authApi";
 
 interface AuthState {
@@ -23,78 +27,36 @@ interface AuthState {
   ) => Promise<void>;
 
   loginWithPassword: (
-    username: string,
+    email: string,
     password: string
   ) => Promise<void>;
 
-  login: (user: User) => Promise<void>;
   logout: () => Promise<void>;
   loadUser: () => Promise<void>;
+
+  resetPassword: (email: string) => Promise<void>;
 }
 
-const SESSION_KEY = "filmx_session";
-const ACCESS_KEY = "filmx_access_token";
-const REFRESH_KEY = "filmx_refresh_token";
-
-const saveSession = async (
-  user: User,
-  accessToken: string,
-  refreshToken: string
-) => {
-  console.log("========== SAVE SESSION ==========");
-
-  await SecureStore.setItemAsync(
-    ACCESS_KEY,
-    accessToken
-  );
-
-  console.log("ACCESS TOKEN SAVED");
-
-  await SecureStore.setItemAsync(
-    REFRESH_KEY,
-    refreshToken
-  );
-
-  console.log("REFRESH TOKEN SAVED");
-
-  await AsyncStorage.setItem(
-    SESSION_KEY,
-    JSON.stringify(user)
-  );
-
-  console.log("USER SESSION SAVED");
-
-  const savedToken =
-    await SecureStore.getItemAsync(ACCESS_KEY);
-
-  console.log(
-    "TOKEN READ FROM MOBILE:",
-    savedToken ? "SUCCESS" : "FAILED"
-  );
-
-  console.log(
-    "SAVED TOKEN MATCH:",
-    savedToken === accessToken
-  );
-};
-
-const clearSession = async () => {
-  await SecureStore.deleteItemAsync(ACCESS_KEY);
-  await SecureStore.deleteItemAsync(REFRESH_KEY);
-  await AsyncStorage.removeItem(SESSION_KEY);
+// Хуучин DummyJSON session устгах
+const clearLegacySession = async () => {
+  await SecureStore.deleteItemAsync("filmx_access_token");
+  await SecureStore.deleteItemAsync("filmx_refresh_token");
+  await AsyncStorage.removeItem("filmx_session");
 };
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isLoggedIn: false,
 
+  // REGISTER
   register: async (
     firstName,
     lastName,
     email,
     password
   ) => {
-    console.log("REGISTER REQUEST -> DummyJSON");
+    console.log("========== REGISTER ==========");
+    console.log("REGISTER REQUEST -> Firebase");
 
     await registerUser(
       firstName,
@@ -103,20 +65,16 @@ export const useAuthStore = create<AuthState>((set) => ({
       password
     );
 
-    console.log("REGISTER RESPONSE RECEIVED");
+    console.log("REGISTER SUCCESS");
   },
 
-  loginWithPassword: async (username, password) => {
+  // LOGIN
+  loginWithPassword: async (email, password) => {
     console.log("========== MOBILE LOGIN ==========");
-    console.log("USERNAME:", username);
-    console.log(
-      "REQUEST URL: https://dummyjson.com/auth/login"
-    );
+    console.log("EMAIL:", email);
+    console.log("AUTH PROVIDER: Firebase");
 
-    const result = await loginUser(
-      username,
-      password
-    );
+    const result = await loginUser(email, password);
 
     const user: User = {
       id: result.id,
@@ -124,94 +82,100 @@ export const useAuthStore = create<AuthState>((set) => ({
       email: result.email,
       firstName: result.firstName,
       lastName: result.lastName,
+      image: result.image,
     };
 
-    if (!result.accessToken || !result.refreshToken) {
-      throw new Error("Server did not return tokens.");
+    if (!result.accessToken) {
+      throw new Error("Firebase ID token not received.");
     }
 
-    await saveSession(
-      user,
-      result.accessToken,
-      result.refreshToken
+    const token = await getAuthToken();
+
+    console.log("========== AUTH SESSION ==========");
+    console.log("USER UID:", user.id);
+    console.log("ID TOKEN RECEIVED:", Boolean(token));
+    console.log(
+      "TOKEN MATCH:",
+      token === result.accessToken
     );
+
+    // Өмнөх хэрэглэгчийн мэдээллийг цэвэрлэх
+    useFavoriteStore.getState().clearData();
 
     set({
       user,
       isLoggedIn: true,
     });
+
+    // Firestore-оос хэрэглэгчийн кинонуудыг татах
+    console.log("========== LOAD USER MOVIES ==========");
+
+    await useFavoriteStore.getState().loadData();
+
+    console.log(
+      "MOVIE DATA LOADED:",
+      useFavoriteStore.getState().hydrated
+    );
 
     console.log("LOGIN SUCCESS");
   },
 
-  login: async (user) => {
-    await AsyncStorage.setItem(
-      SESSION_KEY,
-      JSON.stringify(user)
-    );
+  // PASSWORD RESET
+  resetPassword: async (email) => {
+    console.log("========== RESET PASSWORD ==========");
+    console.log("RESET REQUEST -> Firebase");
 
-    set({
-      user,
-      isLoggedIn: true,
-    });
+    await resetPasswordApi(email);
+
+    console.log("RESET REQUEST SUCCESS");
   },
 
+  // LOGOUT
   logout: async () => {
-    await clearSession();
+    await logoutUser();
+
+    // Хэрэглэгчийн кинонуудыг store-оос цэвэрлэх
+    useFavoriteStore.getState().clearData();
 
     set({
       user: null,
       isLoggedIn: false,
     });
 
+    // Guest хэрэглэгчийн мэдээллийг сэргээх
+    await useFavoriteStore.getState().loadData();
+
     console.log("LOGOUT SUCCESS");
+    console.log("USER SESSION CLEARED");
+    console.log(
+      "GUEST DATA LOADED:",
+      useFavoriteStore.getState().hydrated
+    );
   },
 
+  // RESTORE SESSION
   loadUser: async () => {
     try {
       console.log("========== RESTORE SESSION ==========");
 
-      let accessToken =
-        await SecureStore.getItemAsync(ACCESS_KEY);
+      await clearLegacySession().catch((error) => {
+        console.log("LEGACY CLEANUP ERROR:", error);
+      });
 
-      const refreshToken =
-        await SecureStore.getItemAsync(REFRESH_KEY);
+      await auth.authStateReady();
 
-      if (!accessToken && !refreshToken) {
-        set({ user: null, isLoggedIn: false });
+      if (!auth.currentUser) {
+        set({
+          user: null,
+          isLoggedIn: false,
+        });
+
+        console.log("NO ACTIVE SESSION");
         return;
       }
 
-      let serverUser;
-
-      try {
-        if (!accessToken) {
-          throw new Error("Missing access token");
-        }
-
-        serverUser = await getAuthUser(accessToken);
-      } catch (error) {
-        if (!refreshToken) {
-          throw error;
-        }
-
-        const tokens =
-          await refreshAuthToken(refreshToken);
-
-        accessToken = tokens.accessToken;
-
-        serverUser = await getAuthUser(accessToken);
-
-        await SecureStore.setItemAsync(
-          ACCESS_KEY,
-          tokens.accessToken
-        );
-
-        await SecureStore.setItemAsync(
-          REFRESH_KEY,
-          tokens.refreshToken
-        );
-      }
+      const serverUser = await getAuthUser();
+      const token = await getAuthToken();
 
       const user: User = {
         id: serverUser.id,
@@ -219,20 +183,18 @@ export const useAuthStore = create<AuthState>((set) => ({
         email: serverUser.email,
         firstName: serverUser.firstName,
         lastName: serverUser.lastName,
+        image: serverUser.image,
       };
-
-      await AsyncStorage.setItem(
-        SESSION_KEY,
-        JSON.stringify(user)
-      );
 
       set({
         user,
         isLoggedIn: true,
       });
 
-      console.log("TOKEN VERIFIED BY SERVER");
+      console.log("SESSION RESTORED");
+      console.log("USER UID:", user.id);
       console.log("USER:", user.username);
+      console.log("ID TOKEN AVAILABLE:", Boolean(token));
 
     } catch (error) {
       console.log("SESSION RESTORE ERROR:", error);
